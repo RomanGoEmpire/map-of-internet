@@ -11,9 +11,12 @@ from code.requestor import get_content, get_links, get_title
 
 
 def scrape(url, url_stack, database):
+    
     # get the content of the url
     url = url_stack.pop(0)
     url = url.rstrip("/")
+
+    print(f"Scraping: {url}")
     content = get_content(url)
     links = get_links(url, content)
 
@@ -22,6 +25,7 @@ def scrape(url, url_stack, database):
 
     if not links:
         return url_stack
+        
     for link in links:
         if link is None:
             continue
@@ -36,15 +40,16 @@ def scrape(url, url_stack, database):
         if not link.startswith("http" or "https" or "www" or "ftp"):
             continue
         link = link.rstrip("/")
-        print(url, link)
-
+        
         if is_in_db(database=database, table="websites", url=link):
             continue
-
+            
+        print(f"Added: {link}")
         url_stack.append(link)
 
         # add the link to the database
         add_row(database=database, table="websites", url=link)
+        
         # add the connection to the database
         id_current = get_id(database=database, table="websites", url=url)
         id_link = get_id(database=database, table="websites", url=link)
@@ -61,9 +66,18 @@ if __name__ == "__main__":
     # create a table to store the data
     database = "internet.db"
     path = os.getcwd()
+
+    # create database if it doesnt exist
+    if not database in os.listdir(path):
+        conn = sqlite3.connect(database)
+        conn.close()
+    # reset tables (temporary)
     create_table_website(path, "internet", "websites")
     create_table_links(path, "internet", "links")
+
+    # it would go forever otherwise.
     counter = 100
+    
     url_stack = []
     url_stack.append("https://www.riotgames.com/")
 
