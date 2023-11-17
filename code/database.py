@@ -17,7 +17,6 @@ def create_table_website(
     cur.execute(
         f"""CREATE TABLE IF NOT EXISTS {name} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
         url TEXT NOT NULL
         )"""
     )
@@ -70,8 +69,19 @@ def add_row(database, table, **kwargs):
     conn.close()
 
 
-def get_id(database, table, title, url):
+def get_id(database, table, url):
     conn = sqlite3.connect(database)
     cur = conn.cursor()
-    cur.execute(f"SELECT id FROM {table} WHERE title = '{title}' AND url = '{url}'")
-    return cur.fetchone()[0]
+    cur.execute(f"SELECT id FROM {table} WHERE url = '{url}'")
+    result = cur.fetchone()
+    conn.close()
+    return result[0]
+
+
+def is_in_db(database, table, url):
+    conn = sqlite3.connect(database)
+    cur = conn.cursor()
+    cur.execute(f"SELECT id FROM {table} WHERE url = '{url}'")
+    result = cur.fetchone()
+    conn.close()
+    return bool(result)
