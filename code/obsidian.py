@@ -1,45 +1,46 @@
-import asyncio
 import os
+from urllib.parse import urlparse
 
-import aiofiles
+
+def get_domain_name(url):
+    parsed_url = urlparse(url)
+    domain_name = parsed_url.netloc
+    return domain_name
 
 
-def template_website(title, url, links):
-    links_string = "\n".join([f"- [[{link}]]" for link in links])
+def cleanup_links(url, links):
+    new_links = []
+    for link in links:
+        if link and link.startswith("http" or "https" or "www"):
+            new_links.append(format_url_to_valid_path(get_domain_name(link)))
+    set_links = set(new_links)
+    set_links.discard(url)
+    return list(set_links)
+
+
+def format_url_to_valid_path(url):
+    url_headline = (
+        url.replace("https://", "").replace("www.", "").replace("http://", "")
+    )
+    return url_headline
+
+
+def template_website(title, url, links, cleaned_links):
+    original_links = [
+        f"- {link}" for link in links if link and not link.startswith("/" or "#")
+    ]
     return f"""---
-Title: "[[{title}]]"
-url: {url}
-tags:
-    - website
+url: {get_domain_name(url)}
 ---
 # {title}
 ---
 ## Links
 ---
-{links_string}
-"""
+{"\n".join([f"- [[{link}]]" for link in cleaned_links])}
 
-
-def no_title_template(url, links):
-    links_string = "\n".join([f"- [[{link}]]" for link in links])
-    return f"""---
-url: {url}
-tags:
-    - website
+## Original links
 ---
-## Links
----
-{links_string}
-"""
-
-
-def template_title_page(title):
-    return f"""---
-Title: {title}
-tags:
-    - website_title
----
-# {title}
+{"\n".join(original_links)}
 """
 
 
@@ -47,48 +48,17 @@ class Obsidian:
     def __init__(self, path) -> None:
         self.path = path
 
-    def save_node(self, title, url, links):
-        url_headline = url.replace("https://", "")
-        url_headline = url_headline.replace("/", "_")
+    def save_node(self, title, url, links, cleaned_links):
+        url_headline = format_url_to_valid_path(url)
 
-        if title:
-            # cleanu up title
-            title = title.replace("|", " ")
-            title = title.replace(":", " ")
-            title = title.replace("?", " ")
-            title = title.replace("*", " ")
-            title = title.replace('"', " ")
-            title = title.replace("<", " ")
-            title = title.replace(">", " ")
-            title = title.replace("\\", " ")
-            title = title.replace("/", " ")
-            title = title.replace("  ", " ")
-            title = title.replace("\n", " ")
-            title = title.replace("\t", " ")
-            title = title.replace("\r", " ")
-
-            with open(
-                f"{os.path.join(self.path, url_headline)}.md", "w", encoding="utf-8"
-            ) as f:
-                f.write(template_website(title, url, links))
-            with open(
-                f"{os.path.join(self.path, title)}.md", "w", encoding="utf-8"
-            ) as f:
-                f.write(template_title_page(title))
-        else:
-            with open(
-                f"{os.path.join(self.path, url_headline)}.md", "w", encoding="utf-8"
-            ) as f:
-                f.write(no_title_template(url, links))
-
-    def format_url_to_valid_path(self, url):
-        url_headline = url.replace("https://", "")
-        url_headline = url_headline.replace("/", "_")
-        return url_headline
+        with open(
+            f"{os.path.join(self.path, url_headline)}.md", "w", encoding="utf-8"
+        ) as f:
+            f.write(template_website(title, url, links, cleaned_links))
 
     def format_links(self, links):
-        return [self.format_url_to_valid_path(link) for link in links]
+        return [format_url_to_valid_path(link) for link in links]
 
     def is_in_directory(self, url):
-        url = self.format_url_to_valid_path(url)
+        url = format_url_to_valid_path(url)
         return os.path.exists(os.path.join(self.path, url))

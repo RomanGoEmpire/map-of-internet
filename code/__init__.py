@@ -12,5 +12,4 @@ from .graph import (
     load_graph,
     save_graph,
 )
-from .obsidian import Obsidian
-from .requestor import get_content, get_links, get_title
+from .obsidian import Obsidian, cleanup_links, get_domain_name

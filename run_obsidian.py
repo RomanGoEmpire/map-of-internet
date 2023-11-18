@@ -1,62 +1,18 @@
 import asyncio
 import logging
-from code.obsidian import Obsidian
-from code.requestor import get_content, get_links, get_title
+import os
+from code.obsidian import Obsidian, cleanup_links
 from collections import deque
-from urllib.parse import urlparse
 
+import aiohttp
 import keyboard
+from bs4 import BeautifulSoup
 from colorlog import ColoredFormatter
-
-
-def get_domain_name(url):
-    parsed_url = urlparse(url)
-    # The netloc attribute contains the domain name
-    domain_name = parsed_url.netloc
-    return domain_name
-
-
-def cleanup_links(url, links):
-    links = [get_domain_name(link) for link in links]
-    # Remove empty links
-    links = [link for link in links if link]
-    set_links = set(links)
-    # remove the url itself
-    set_links.discard(url)
-    return list(set_links)
-
-
-def scrape(url_stack, obsidian, visited, logger):
-    url = url_stack.popleft()
-    if url in visited:
-        logger.debug(f"Already visited {url}")
-        return url_stack, visited
-    url_search = f"https://{url}"
-    logger.info(f"Requesting {url_search}")
-
-    content = get_content(url_search, logger)
-    if not content:
-        return url_stack, visited
-    title = get_title(content)
-    links = get_links(content)
-
-    visited.append(url)
-
-    if links:
-        links = cleanup_links(url, links)
-        url_stack.extend(links)
-    logger.debug(f"Links : {links}")
-
-    if not obsidian.is_in_directory(url):
-        logger.debug(f"New url: {url}")
-        obsidian.save_node(title, url, links)
-
-    return url_stack, visited
 
 
 def cmd_logger():
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     # Create a console handler with colored output using colorlog
     console_handler = logging.StreamHandler()
@@ -81,24 +37,88 @@ def cmd_logger():
     return logger
 
 
-def main():
-    logger = cmd_logger()
-    path = None  # path to your obsidian vault
-    starting_url = "www.googl.com"
-    url_stack = deque([starting_url])
+async def fetch_content(url, session):
+    try:
+        logger.debug(f"Requesting {url}")
+        url_link = f"https://{url}"
+        async with session.get(url_link) as response:
+            logger.debug(f"Received {url}")
+            return await response.text(), url
+    except Exception as e:
+        logger.warning(f"Error for {url} - {e}")
+        return None, url
+
+
+def get_links(html):
+    soup = BeautifulSoup(html, "html.parser")
+    links = soup.findAll("a")
+    links = [link.get("href") for link in links]
+    return links
+
+
+def get_title(html):
+    soup = BeautifulSoup(html, "html.parser")
+    try:
+        title = soup.title.string
+    except AttributeError:
+        return None
+    return title
+
+
+def save_visited(visited):
+    with open("visited.txt", "w") as f:
+        for url in visited:
+            f.write(f"{url}\n")
+
+
+async def main():
+    path = "C:\\Users\\gerlo\\CORE\\6 Obsidian\\Internet"
+    url = "www.riotgames.com"
 
     obsidian = Obsidian(path)
-    counter = 0  # if you want to stop the script after x iterations
-    visited = []
-    while url_stack:
-        if keyboard.is_pressed("esc"):
-            break
-        logger.info(f"Stack size: {len(url_stack)}")
-        url_stack, visited = scrape(url_stack, obsidian, visited, logger)
-        if counter > 1000:
-            break
-        counter += 1
+
+    if os.path.exists("visited.txt") and input("Load visited? (y/n)") == "y":
+        with open("visited.txt", "r") as f:
+            visited = set(f.read().splitlines())
+    else:
+        visited = []
+
+    async with aiohttp.ClientSession() as session:
+        tasks = {asyncio.create_task(fetch_content(url, session))}
+        while tasks:
+            if keyboard.is_pressed("q"):
+                logger.info("Saving visited")
+                save_visited(visited)
+                session.close()
+                break
+
+            logger.info(f"Tasks: {len(tasks)}")
+            done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            logger.info(f"Done: {len(done)}")
+            for future in done:
+                html, url = future.result()
+                visited.append(url)
+
+                if not html:
+                    continue
+
+                links = get_links(html)
+                title = get_title(html)
+                new_urls = cleanup_links(url, links)
+
+                obsidian.save_node(title, url, links, new_urls)
+
+                if new_urls:
+                    logger.debug(f"Adding {len(new_urls)} new urls")
+                    for new_url in new_urls:
+                        if new_url not in visited:
+                            tasks.add(
+                                asyncio.create_task(fetch_content(new_url, session))
+                            )
+                        else:
+                            logger.debug(f"{new_url} already visited")
 
 
 if __name__ == "__main__":
-    main()
+    logger = cmd_logger()
+    asyncio.run(main())
