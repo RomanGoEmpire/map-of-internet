@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import time
 from code.obsidian import Obsidian, cleanup_links
 from collections import deque
 
@@ -38,6 +39,7 @@ def cmd_logger():
 
 
 async def fetch_content(url, session):
+    await asyncio.sleep(0.1)
     try:
         logger.debug(f"Requesting {url}")
         url_link = f"https://{url}"
@@ -73,7 +75,7 @@ def save_visited(visited):
 
 async def main():
     path = "C:\\Users\\gerlo\\CORE\\6 Obsidian\\Internet"
-    url = "www.riotgames.com"
+    url = "www.netthelp.de"
 
     obsidian = Obsidian(path)
 
@@ -81,7 +83,7 @@ async def main():
         with open("visited.txt", "r") as f:
             visited = set(f.read().splitlines())
     else:
-        visited = []
+        visited = set()
 
     async with aiohttp.ClientSession() as session:
         tasks = {asyncio.create_task(fetch_content(url, session))}
@@ -97,7 +99,7 @@ async def main():
             logger.info(f"Done: {len(done)}")
             for future in done:
                 html, url = future.result()
-                visited.append(url)
+                visited.add(url)
 
                 if not html:
                     continue
@@ -117,6 +119,8 @@ async def main():
                             )
                         else:
                             logger.debug(f"{new_url} already visited")
+            logger.info(f"Sleeping for 2 seconds")
+            time.sleep(2)
 
 
 if __name__ == "__main__":
