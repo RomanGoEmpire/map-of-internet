@@ -72,7 +72,7 @@ def save_visited(visited):
 
 
 async def main():
-    path = "C:\\Users\\gerlo\\CORE\\6 Obsidian\\Internet"
+    path = "" # your path you want to save it to
     url = "www.riotgames.com"
 
     obsidian = Obsidian(path)
